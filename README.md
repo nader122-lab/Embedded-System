@@ -22,7 +22,7 @@ The project uses:
  * A message queue
  
 In addition, the project includes the code for the serial interface. **You are not expected to be able to answer 
-questions about this ocode.** Instead, you should understand the API, which has two functions:
+questions about this code.** Instead, you should understand the API, which has two functions:
    1. `sendMsg` which write a message to the terminal
    2. `readLine` which reads a line from the terminal
  
