@@ -7,6 +7,7 @@
 #include <MKL25Z4.h>
 #include <stdbool.h>
 
+// values used for eol parameter
 #define NOLINE (0)
 #define LFONLY (1)
 #define CRLF (2)

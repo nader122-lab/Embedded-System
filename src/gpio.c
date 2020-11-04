@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------------
-    Code for Lab 5
+    Code for Lab 4
 
     Configuration code for GPIO
     Functions to turn LEDs on and off

@@ -11,7 +11,7 @@
 
      * readLine
        - Single outstanding request 
-       - Blocking: uses an event flag to signal completion
+       - Blocking: does not return until end of line read
        - Reads characters until LF; CR ignored; use with local echo
        - Message text written to buffer in user thread
          

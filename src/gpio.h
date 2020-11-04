@@ -1,4 +1,4 @@
-// Header file for GPIO in Lab 5
+// Header file for GPIO in Lab 4
 //   Definitions for pin usage
 //   Function prototypes
 

@@ -1,5 +1,4 @@
-# Lab 4
-Given code for lab 4
+# Given code for lab 4
 
 The purpose of this project is to illustrate the use of 
  1. Event flags, which are used to signal between threads

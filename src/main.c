@@ -1,19 +1,15 @@
-/*
-To do:
-6. Hanlde UART read errors
-7. Do interrupt locks
 
-*/
 /*----------------------------------------------------------------------------
-    Code for Lab 4
+    Given code for Embedded Systems Lab 4 
     
     This project illustrates the use of 
+      - threads
       - event flags
       - a message queue
 
     The behaviour is: 
         - the green LED can be turned on or off using command entered on a terminal 
-          emulator (see lab sheet)data and send over the USB link
+          emulator (see lab sheet) and send over the USB link
         - if the command are entered in the wrong order, the system enters an
           error state: the red LED flashes
         - to exit from the error state the 'reset' command must be entered
