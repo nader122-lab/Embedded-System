@@ -41,8 +41,8 @@
 #include "serialPort.h"
 
 #define RESET_EVT (1)
-osEventFlagsId_t errorFlags ;       // id of the event flags
-osMessageQueueId_t controlMsgQ ;    // id for the message queue
+
+osMessageQueueId_t controlIQ;    // id for the message queue
 
 
 /*--------------------------------------------------------------
@@ -54,54 +54,7 @@ osMessageQueueId_t controlMsgQ ;    // id for the message queue
  *          - LED flashes when there is an error
  *--------------------------------------------------------------*/
 
-osThreadId_t t_redLED;        /* id of thread to flash red led */
 
-// Red LED states
-#define ERRORON (0)
-#define ERROROFF (1)
-#define NOERROR (2)
-#define ERRORFLASH (400)
-
-void redLEDThread (void *arg) {
-    int redState = ERRORON ;
-    redLEDOnOff(LED_ON);
-    uint32_t flags ;                // returned by osEventFlagWait
-    uint32_t delay = ERRORFLASH ;   // delay used in the wait - varies
-
-    while (1) {
-        // wait for a signal or timeout
-        flags = osEventFlagsWait (errorFlags, MASK(RESET_EVT), osFlagsWaitAny, delay);
-        
-        // interpret state machine
-        switch (redState) {
-            case ERRORON:   // error state - flashing, currently on
-                redLEDOnOff(LED_OFF);
-                if (flags == osFlagsErrorTimeout) {  // timeout continue flashing           
-                    redState = ERROROFF ;
-                } else {                             // signal - move to no error state
-                    redState = NOERROR ;
-                    delay = osWaitForever ;
-                }
-                break ;
-
-            case ERROROFF:   // error state - flashing, currently off
-                if (flags == osFlagsErrorTimeout) {  // timeout continue flashing
-                    redLEDOnOff(LED_ON);
-                    redState = ERRORON ;
-                } else {                             // signal - move to no error state
-                    redState = NOERROR ;
-                    delay = osWaitForever ;
-                }
-                break ;
-                
-            case NOERROR:                            // no error - react on signal
-                delay = ERRORFLASH ;
-                redState = ERRORON ;
-                redLEDOnOff(LED_ON) ;            
-                break ;
-        }
-    }
-}
 
 /*--------------------------------------------------------------
  *   Thread t_greenLED
@@ -120,56 +73,49 @@ osThreadId_t t_greenLED;      /* id of thread to toggle green led */
 
 // Green LED states
 #define GREENON (0)
-#define GREENOFF (1)
-#define GERROR (2)
+#define REDON (1)
 
-enum controlMsg_t {on, off, reset} ;  // type for the messages
 
-void greenLEDThread (void *arg) {
-    int ledState = GERROR ;
+enum controlMsg_t {faster, slower} ;  // type for the messages
+uint32_t time[] = {500, 1000, 1500, 2000, 2500, 3000, 3500, 4000};
+void greenLEDThread (void *arg) {   
+    int ledState = GREENON ;
     greenLEDOnOff(LED_OFF);
-    enum controlMsg_t msg ;
-    osStatus_t status ;   // returned by message queue get
+    uint32_t i = 3;
+    osStatus_t status;
+    uint32_t counter, timer;
     while (1) {
-        // wait for message from queue
-        status = osMessageQueueGet(controlMsgQ, &msg, NULL, osWaitForever);
-        if (status == osOK) {
-            switch (ledState) {
+      // wait for message from queue
+      status = osMessageQueueGet(controlIQ, &i, NULL, timer);       
+      if (status == osOK){
+        counter = osKernelGetTickCount() - counter;  
+        if (counter < time[i]){       
+        timer = time[i] - counter;
+        }        
+        else{
+         timer = 1;
+        }
+      }
+      
+      else if (status == osErrorTimeout) {
+       timer = time[i];
+       switch (ledState) {
+      
                 case GREENON:
-                    if (msg == off) {           // expected message
-                        greenLEDOnOff(LED_OFF);
-                        ledState = GREENOFF ; 
-                    }
-                    else {                      // unexpected - go to error
-                        // signal red thread                        
-                        osEventFlagsSet(errorFlags, MASK(RESET_EVT)) ;
-                        greenLEDOnOff(LED_OFF);
-                        ledState = GERROR ;
-                    }
+                    counter = osKernelGetTickCount(); 
+                    greenLEDOnOff(LED_ON);
+                    redLEDOnOff(LED_OFF);
+                    ledState = REDON ;                       
                     break ;
                     
-                case GREENOFF:      
-                    if (msg == on) {            // expected message
-                        greenLEDOnOff(LED_ON);
-                        ledState = GREENON ; 
-                    }
-                    else {                      // unexpected - go to error
-                        // signal red thread                        
-                        osEventFlagsSet(errorFlags, MASK(RESET_EVT)) ;
-                        ledState = GERROR ;
-                    }
+                case REDON:  
+                    counter = osKernelGetTickCount(); 
+                    redLEDOnOff(LED_ON);
+                    greenLEDOnOff(LED_OFF);
+                    ledState = GREENON ; 
                     break ;
                     
-                case GERROR: 
-                    if (msg == reset) {         // expected message
-                        // signal red thread to elave error state  
-                        osEventFlagsSet(errorFlags, MASK(RESET_EVT)) ;
-                        greenLEDOnOff(LED_ON);
-                        ledState = GREENON ;
-                    }
-                    // ignore other messages - already in error state
-                    break ;
-                }
+              }
         }
     }
 }
@@ -183,29 +129,44 @@ void greenLEDThread (void *arg) {
  *------------------------------------------------------------*/
 osThreadId_t t_command;        /* id of thread to receive command */
 
-/* const */ char prompt[] = "Command: on / off / reset>" ;
+/* const */ char prompt[] = "Command: faster / slower>" ;
 /* const */ char empty[] = "" ;
 
 void commandThread (void *arg) {
-    char response[6] ;  // buffer for response string
+   int i = 3; 
+   char response[6] ;  // buffer for response string
     enum controlMsg_t msg ;
+    osMessageQueuePut(controlIQ, &i, 0, NULL);
     bool valid ;
     while (1) {
-        //sendMsg(empty, CRLF) ;
+        sendMsg(empty, CRLF) ;
         sendMsg(prompt, NOLINE) ;
-        readLine(response, 5) ;  // 
+        readLine(response, 6) ;  // 
         valid = true ;
-        if (strcmp(response, "on") == 0) {
-            msg = on ;
-        } else if (strcmp(response, "off") == 0) {
-            msg = off ;
-        } else if (strcmp(response, "reset") == 0) {
-            msg = reset ;
+        if (strcmp(response, "faster") == 0) {
+            msg = faster ;
+        } else if (strcmp(response, "slower") == 0) {
+            msg = slower ;
         } else valid = false ;
         
         if (valid) {
-            osMessageQueuePut(controlMsgQ, &msg, 0, NULL);  // Send Message
-        } else {
+             if (msg == slower) {                 
+                     i = i+1;                   
+                  if (i > 7){
+                  i = 0;
+                 }                   
+        } 
+                    
+        else if (msg == faster) {                                                      
+                    i = i-1;                   
+                  if(i < 0){
+                  i = 7; 
+                 } 
+        }           
+        osMessageQueuePut(controlIQ, &i, 0, NULL);  // Send Message     
+        } 
+        
+        else {
             sendMsg(response, NOLINE) ;
             sendMsg(" not recognised", CRLF) ;
         }
@@ -233,17 +194,14 @@ int main (void) {
     // Initialize CMSIS-RTOS
     osKernelInitialize();
     
-    // Create event flags
-    errorFlags = osEventFlagsNew(NULL);
+
     
     // create message queue
-    controlMsgQ = osMessageQueueNew(2, sizeof(enum controlMsg_t), NULL) ;
-
+    controlIQ = osMessageQueueNew(2, 1, NULL);
     // initialise serial port 
     initSerialPort() ;
 
     // Create threads
-    t_redLED = osThreadNew(redLEDThread, NULL, NULL); 
     t_greenLED = osThreadNew(greenLEDThread, NULL, NULL);
     t_command = osThreadNew(commandThread, NULL, NULL); 
     
